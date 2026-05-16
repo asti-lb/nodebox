@@ -1,0 +1,16 @@
+{
+  "bitcoin": {
+    "rpcCookiePath": "/data/bitcoin/.cookie",
+    "rpcPort": 8332
+  },
+  "fulcrum": {
+    "tcpPort": 50001
+  },
+  "mempool": {
+    "port": 8080
+  },
+  "dashboard": {
+    "port": 3080,
+    "onionAddress": "your-fulcrum-onion-address.onion"
+  }
+}

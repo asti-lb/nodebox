@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Updates — NodeBox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <a class="nav-brand" href="/">NodeBox</a>
+    <a href="/">Dashboard</a>
+    <a href="/connect.html">Connect</a>
+    <a href="/updates.html" class="active">Updates</a>
+    <a href="/mempool/" target="_blank">mempool</a>
+  </nav>
+
+  <main>
+    <h1>Updates</h1>
+    <div class="update-list" id="update-list">
+
+      <div class="update-item" id="item-bitcoin-core">
+        <div class="update-item-info">
+          <h2>Bitcoin Core</h2>
+          <p id="ver-bitcoin-core">Checking versions…</p>
+        </div>
+        <button class="btn btn-primary" onclick="startUpdate('bitcoin-core')" disabled id="btn-bitcoin-core">
+          Update
+        </button>
+        <div class="log-box" id="log-bitcoin-core"></div>
+      </div>
+
+      <div class="update-item" id="item-fulcrum">
+        <div class="update-item-info">
+          <h2>Fulcrum</h2>
+          <p id="ver-fulcrum">Checking versions…</p>
+        </div>
+        <button class="btn btn-primary" onclick="startUpdate('fulcrum')" disabled id="btn-fulcrum">
+          Update
+        </button>
+        <div class="log-box" id="log-fulcrum"></div>
+      </div>
+
+      <div class="update-item" id="item-mempool">
+        <div class="update-item-info">
+          <h2>mempool.space</h2>
+          <p id="ver-mempool">Checking versions…</p>
+        </div>
+        <button class="btn btn-primary" onclick="startUpdate('mempool')" disabled id="btn-mempool">
+          Update
+        </button>
+        <div class="log-box" id="log-mempool"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    async function load() {
+      const [status, updates] = await Promise.all([fetchStatus(), fetchUpdates()]);
+
+      const installed = {
+        'bitcoin-core': status?.bitcoin?.version
+          ? `v${Math.floor(status.bitcoin.version / 10000)}.${Math.floor((status.bitcoin.version % 10000) / 100)}.${status.bitcoin.version % 100}`
+          : null,
+        'fulcrum': status?.fulcrum?.version ?? null,
+        'mempool':  null,
+      };
+
+      const latest = {
+        'bitcoin-core': updates?.bitcoinCore ?? null,
+        'fulcrum':      updates?.fulcrum     ?? null,
+        'mempool':      updates?.mempool     ?? null,
+      };
+
+      for (const svc of ['bitcoin-core', 'fulcrum', 'mempool']) {
+        const inst = installed[svc];
+        const lat  = latest[svc];
+        const el   = document.getElementById(`ver-${svc}`);
+        const btn  = document.getElementById(`btn-${svc}`);
+
+        if (lat) {
+          el.textContent = inst
+            ? `Installed: ${inst}  ·  Latest: v${lat}`
+            : `Latest: v${lat}`;
+          btn.disabled = false;
+        } else {
+          el.textContent = inst ? `Installed: ${inst}` : 'Version unavailable';
+        }
+      }
+    }
+
+    async function startUpdate(service) {
+      const btn = document.getElementById(`btn-${service}`);
+      const log = document.getElementById(`log-${service}`);
+
+      if (!confirm(`Update ${service}? The service will restart briefly.`)) return;
+
+      btn.disabled = true;
+      log.textContent = '';
+      log.classList.add('active');
+
+      const res = await fetch(`/api/update/${service}`, { method: 'POST' });
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            log.textContent += line.slice(6) + '\n';
+            log.scrollTop = log.scrollHeight;
+          }
+        }
+      }
+
+      btn.disabled = false;
+    }
+
+    load();
+  </script>
+</body>
+</html>

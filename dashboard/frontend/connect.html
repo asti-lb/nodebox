@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connect — NodeBox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <a class="nav-brand" href="/">NodeBox</a>
+    <a href="/">Dashboard</a>
+    <a href="/connect.html" class="active">Connect</a>
+    <a href="/updates.html">Updates</a>
+    <a href="/mempool/" target="_blank">mempool</a>
+  </nav>
+
+  <main>
+    <h1>Connect your wallet</h1>
+    <div class="connect-grid">
+
+      <div class="connect-card">
+        <h2>Sparrow Wallet — via Tor</h2>
+        <p>Connect from anywhere. Requires Tor running in Sparrow.</p>
+        <div class="addr" id="tor-addr">Loading…</div>
+        <div class="qr"><img id="tor-qr" alt="QR Code"></div>
+      </div>
+
+      <div class="connect-card">
+        <h2>Sparrow Wallet — Local network</h2>
+        <p>Connect from your home network (faster, no Tor required).</p>
+        <div class="addr" id="local-addr">Loading…</div>
+        <div class="qr"><img id="local-qr" alt="QR Code"></div>
+      </div>
+
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    async function load() {
+      const cfg = await fetchConfig();
+      if (!cfg) return;
+
+      const torAddr   = `${cfg.onionAddress}:${cfg.fulcrumPort}`;
+      const localAddr = `${cfg.localIp}:${cfg.fulcrumPort}`;
+
+      setText('tor-addr',   torAddr);
+      setText('local-addr', localAddr);
+
+      document.getElementById('tor-qr').src   = `/api/qr?data=${encodeURIComponent(torAddr)}`;
+      document.getElementById('local-qr').src = `/api/qr?data=${encodeURIComponent(localAddr)}`;
+    }
+
+    load();
+  </script>
+</body>
+</html>

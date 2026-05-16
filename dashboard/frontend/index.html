@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NodeBox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav>
+    <a class="nav-brand" href="/">NodeBox</a>
+    <a href="/" class="active">Dashboard</a>
+    <a href="/connect.html">Connect</a>
+    <a href="/updates.html">Updates</a>
+    <a href="/mempool/" target="_blank">mempool</a>
+  </nav>
+
+  <main>
+    <h1>Node Status</h1>
+    <div class="cards" id="cards">
+      <div class="card" id="card-bitcoin">
+        <div class="card-header">
+          <div class="card-title">
+            <img src="logos/bitcoin.svg" alt="">
+            Bitcoin Core
+          </div>
+          <span class="badge badge-loading" id="btc-badge">…</span>
+        </div>
+        <div class="stat"><span class="stat-label">Blocks</span><span class="stat-value" id="btc-blocks">—</span></div>
+        <div class="stat"><span class="stat-label">Peers</span><span class="stat-value" id="btc-peers">—</span></div>
+        <div class="stat"><span class="stat-label">Fee (1 block)</span><span class="stat-value" id="btc-fee">—</span></div>
+        <div id="btc-sync-wrap" style="display:none">
+          <div class="progress-wrap"><div class="progress-bar" id="btc-sync-bar"></div></div>
+          <div class="stat"><span class="stat-label">Sync</span><span class="stat-value" id="btc-sync-pct">—</span></div>
+        </div>
+      </div>
+
+      <div class="card" id="card-fulcrum">
+        <div class="card-header">
+          <div class="card-title">
+            <img src="logos/fulcrum.svg" alt="">
+            Fulcrum
+          </div>
+          <span class="badge badge-loading" id="flc-badge">…</span>
+        </div>
+        <div class="stat"><span class="stat-label">Version</span><span class="stat-value" id="flc-version">—</span></div>
+        <div class="stat"><span class="stat-label">Port (TCP)</span><span class="stat-value">50001</span></div>
+        <div class="stat"><span class="stat-label">Port (SSL)</span><span class="stat-value">50002</span></div>
+      </div>
+
+      <div class="card" id="card-mempool">
+        <div class="card-header">
+          <div class="card-title">
+            <img src="logos/mempool.svg" alt="">
+            mempool.space
+          </div>
+          <span class="badge badge-loading" id="mpl-badge">…</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Explorer</span>
+          <a href="/mempool/" target="_blank" style="color:var(--accent);font-size:0.85rem">Open →</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    async function refresh() {
+      const s = await fetchStatus();
+      if (!s) return;
+
+      // Bitcoin Core
+      const btcOk = s.bitcoin.ok;
+      setbadge('btc-badge', btcOk);
+      setText('btc-blocks', s.bitcoin.blocks?.toLocaleString() ?? '—');
+      setText('btc-peers',  s.bitcoin.peers  ?? '—');
+      const fee = s.bitcoin.feeRate;
+      setText('btc-fee', fee ? `${(fee * 100000).toFixed(1)} sat/vB` : '—');
+      if (!s.bitcoin.synced && s.bitcoin.blocks && s.bitcoin.headers) {
+        const pct = (s.bitcoin.blocks / s.bitcoin.headers * 100).toFixed(1);
+        document.getElementById('btc-sync-wrap').style.display = '';
+        document.getElementById('btc-sync-bar').style.width = `${pct}%`;
+        setText('btc-sync-pct', `${pct}%`);
+      }
+
+      // Fulcrum
+      setbadge('flc-badge', s.fulcrum.ok);
+      setText('flc-version', s.fulcrum.version ?? '—');
+
+      // mempool
+      setbadge('mpl-badge', s.mempool.ok);
+    }
+
+    refresh();
+    setInterval(refresh, 30000);
+  </script>
+</body>
+</html>
