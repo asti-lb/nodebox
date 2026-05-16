@@ -1,0 +1,22 @@
+[Unit]
+Description=mempool.space Backend
+Requires=bitcoind.service mariadb.service
+After=bitcoind.service mariadb.service
+
+[Service]
+ExecStart=/usr/bin/node /opt/mempool/backend/dist/index.js
+WorkingDirectory=/opt/mempool/backend
+User=mempool
+Group=mempool
+Type=simple
+Restart=on-failure
+TimeoutStopSec=60
+
+# Hardening
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

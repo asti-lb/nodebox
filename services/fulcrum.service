@@ -1,0 +1,18 @@
+[Unit]
+Description=Fulcrum Electrum Server
+Requires=bitcoind.service
+After=bitcoind.service
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+[Service]
+ExecStart=/usr/local/bin/fulcrum /data/fulcrum/fulcrum.conf
+User=fulcrum
+Group=fulcrum
+Type=simple
+KillSignal=SIGINT
+Restart=on-failure
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target

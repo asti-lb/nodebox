@@ -1,0 +1,22 @@
+[Unit]
+Description=NodeBox Dashboard
+Requires=bitcoind.service
+After=bitcoind.service
+
+[Service]
+ExecStart=/usr/bin/node /opt/nodebox/dashboard/backend/server.js
+WorkingDirectory=/opt/nodebox/dashboard/backend
+User=dashboard
+Group=dashboard
+Type=simple
+Restart=on-failure
+TimeoutStopSec=10
+
+# Hardening
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

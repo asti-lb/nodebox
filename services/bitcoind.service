@@ -1,0 +1,36 @@
+[Unit]
+Description=Bitcoin Core Daemon
+Requires=network-online.target tor.service i2pd.service
+After=network-online.target tor.service i2pd.service
+
+[Service]
+ExecStart=/usr/local/bin/bitcoind \
+  -pid=/run/bitcoind/bitcoind.pid \
+  -conf=/data/bitcoin/bitcoin.conf \
+  -datadir=/data/bitcoin \
+  -startupnotify='systemd-notify --ready' \
+  -shutdownnotify='systemd-notify --status=Stopping'
+Type=notify
+NotifyAccess=all
+PIDFile=/run/bitcoind/bitcoind.pid
+Restart=on-failure
+TimeoutStartSec=infinity
+TimeoutStopSec=600
+
+User=bitcoin
+Group=bitcoin
+RuntimeDirectory=bitcoind
+RuntimeDirectoryMode=0710
+UMask=0027
+
+# Hardening
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+PrivateDevices=true
+MemoryDenyWriteExecute=true
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

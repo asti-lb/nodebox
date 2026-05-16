@@ -1,0 +1,3 @@
+node_modules/
+dashboard/backend/config.json
+*.log
