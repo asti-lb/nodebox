@@ -67,13 +67,9 @@ h1 {
 /* ── Service sections ────────────────────────────────────────────────────── */
 
 .service-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 1.5rem;
-}
-
-@media (max-width: 700px) {
-  .service-grid { grid-template-columns: 1fr; }
 }
 
 .service {
