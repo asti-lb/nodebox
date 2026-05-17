@@ -110,6 +110,41 @@ function fulcrumStatus() {
   });
 }
 
+function diskUsage(mountPath) {
+  return new Promise((resolve) => {
+    execFile('df', ['-B1', mountPath], (err, stdout) => {
+      if (err) return resolve(null);
+      const parts = stdout.trim().split('\n')[1].split(/\s+/);
+      resolve({ total: parseInt(parts[1]), used: parseInt(parts[2]) });
+    });
+  });
+}
+
+async function systemInfo() {
+  const [diskRoot, diskData] = await Promise.all([diskUsage('/'), diskUsage('/data')]);
+
+  let osName = 'Linux';
+  try {
+    const rel = fs.readFileSync('/etc/os-release', 'utf8');
+    osName = rel.match(/PRETTY_NAME="(.+)"/)?.[1] ?? osName;
+  } catch {}
+
+  let cpuTemp = null;
+  try {
+    cpuTemp = Math.round(parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8')) / 1000);
+  } catch {}
+
+  return {
+    os:        osName,
+    uptimeSec: os.uptime(),
+    totalMem:  os.totalmem(),
+    usedMem:   os.totalmem() - os.freemem(),
+    load:      os.loadavg()[0],
+    cpuTemp,
+    disk:      { root: diskRoot, data: diskData },
+  };
+}
+
 // Parse Fulcrum journal to get indexing progress when port is not yet open
 function fulcrumIndexProgress() {
   return new Promise((resolve) => {
@@ -207,12 +242,13 @@ app.use(express.static(FRONTEND));
 
 // GET /api/status — combined status of all services
 app.get('/api/status', async (req, res) => {
-  const [chainInfo, networkInfo, feeResult, fulcrum, mempool] = await Promise.allSettled([
+  const [chainInfo, networkInfo, feeResult, fulcrum, mempool, system] = await Promise.allSettled([
     rpcCall('getblockchaininfo'),
     rpcCall('getnetworkinfo'),
     rpcCall('estimatesmartfee', [1]),
     fulcrumStatus(),
     mempoolStatus(),
+    systemInfo(),
   ]);
 
   const chain   = chainInfo.status   === 'fulfilled' ? chainInfo.value   : null;
@@ -220,6 +256,7 @@ app.get('/api/status', async (req, res) => {
   const fee     = feeResult.status   === 'fulfilled' ? feeResult.value   : null;
   const flc     = fulcrum.status     === 'fulfilled' ? fulcrum.value     : { ok: false };
   const mpl     = mempool.status     === 'fulfilled' ? mempool.value     : { ok: false, version: null };
+  const sys     = system.status      === 'fulfilled' ? system.value      : null;
 
   const fulcrumData = { ok: flc.ok, version: flc.version ?? null };
   if (!flc.ok) {
@@ -248,6 +285,7 @@ app.get('/api/status', async (req, res) => {
       ok:      mpl.ok,
       version: mpl.version,
     },
+    system: sys,
   });
 });
 

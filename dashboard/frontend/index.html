@@ -19,6 +19,7 @@
   </nav>
 
   <main>
+  <div class="service-grid">
 
     <section class="service">
       <div class="service-head">
@@ -77,6 +78,25 @@
       </div>
     </section>
 
+    <section class="service">
+      <div class="service-head">
+        <h2>Server</h2>
+        <span class="badge badge-ok">Online</span>
+      </div>
+      <div class="card">
+        <div class="stat"><span class="stat-label">OS</span><span class="stat-value" id="sys-os">—</span></div>
+        <div class="stat"><span class="stat-label">Uptime</span><span class="stat-value" id="sys-uptime">—</span></div>
+        <div class="stat"><span class="stat-label">Load (1m)</span><span class="stat-value" id="sys-load">—</span></div>
+        <div class="stat"><span class="stat-label">RAM</span><span class="stat-value" id="sys-ram">—</span></div>
+        <div class="stat"><span class="stat-label">Disk /</span><span class="stat-value" id="sys-disk-root">—</span></div>
+        <div class="stat"><span class="stat-label">Disk /data</span><span class="stat-value" id="sys-disk-data">—</span></div>
+        <div class="stat" id="sys-temp-row" style="display:none">
+          <span class="stat-label">CPU Temp</span><span class="stat-value" id="sys-temp">—</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
   </main>
 
   <script src="app.js"></script>
@@ -89,6 +109,13 @@
       if (d > 0) return `${d}d ${h}h`;
       if (h > 0) return `${h}h ${m}m`;
       return `${m}m`;
+    }
+
+    function fmtBytes(b) {
+      if (b >= 1e12) return `${(b / 1e12).toFixed(1)} TB`;
+      if (b >= 1e9)  return `${(b / 1e9).toFixed(1)} GB`;
+      if (b >= 1e6)  return `${(b / 1e6).toFixed(0)} MB`;
+      return `${b} B`;
     }
 
     function fmtBtcVersion(v) {
@@ -157,6 +184,21 @@
       // mempool
       setbadge('mpl-badge', s.mempool.ok);
       setText('mpl-version', s.mempool.version ? `v${s.mempool.version}` : '—');
+
+      // Server
+      if (s.system) {
+        const sys = s.system;
+        setText('sys-os',     sys.os);
+        setText('sys-uptime', fmtDuration(sys.uptimeSec));
+        setText('sys-load',   sys.load.toFixed(2));
+        setText('sys-ram',    `${fmtBytes(sys.usedMem)} / ${fmtBytes(sys.totalMem)}`);
+        setText('sys-disk-root', sys.disk.root ? `${fmtBytes(sys.disk.root.used)} / ${fmtBytes(sys.disk.root.total)}` : '—');
+        setText('sys-disk-data', sys.disk.data ? `${fmtBytes(sys.disk.data.used)} / ${fmtBytes(sys.disk.data.total)}` : '—');
+        if (sys.cpuTemp !== null) {
+          document.getElementById('sys-temp-row').style.display = '';
+          setText('sys-temp', `${sys.cpuTemp} °C`);
+        }
+      }
 
       // Update badge on nav link
       if (updates) {
