@@ -117,6 +117,7 @@ log "Updating nginx config..."
 python3 - << 'PYEOF'
 POOL_LOCATIONS = """\
     # Public Pool — web UI and API
+    location = /pool { return 302 /pool/; }
     location /pool/api/ {
         proxy_pass         http://127.0.0.1:3334/api/;
         proxy_http_version 1.1;
