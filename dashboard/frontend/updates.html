@@ -64,16 +64,9 @@
       const [status, updates] = await Promise.all([fetchStatus(), fetchUpdates()]);
 
       const installed = {
-        'bitcoin-core': (() => {
-          const v = status?.bitcoin?.version;
-          if (!v) return null;
-          const major = Math.floor(v / 10000);
-          const minor = Math.floor((v % 10000) / 100);
-          const patch = v % 100;
-          return patch > 0 ? `v${major}.${minor}.${patch}` : `v${major}.${minor}`;
-        })(),
-        'fulcrum': status?.fulcrum?.version ?? null,
-        'mempool':  null,
+        'bitcoin-core': btcVersionStr(status?.bitcoin?.version),
+        'fulcrum':      status?.fulcrum?.version ?? null,
+        'mempool':      null,
       };
 
       const latest = {
@@ -90,7 +83,7 @@
 
         if (lat) {
           el.textContent = inst
-            ? `Installed: ${inst}  ·  Latest: v${lat}`
+            ? `Installed: v${inst}  ·  Latest: v${lat}`
             : `Latest: v${lat}`;
           btn.disabled = false;
         } else {

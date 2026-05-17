@@ -25,7 +25,6 @@ try {
   process.exit(1);
 }
 
-const BITCOIN_HOST   = '127.0.0.1';
 const BITCOIN_PORT   = cfg.bitcoin.rpcPort;
 const COOKIE_PATH    = cfg.bitcoin.rpcCookiePath;
 const FULCRUM_PORT   = cfg.fulcrum.tcpPort;
@@ -33,8 +32,20 @@ const MEMPOOL_PORT   = cfg.mempool.port;
 const DASHBOARD_PORT = cfg.dashboard.port;
 const ONION_ADDRESS  = cfg.dashboard.onionAddress;
 
-const ALLOWED_SERVICES = new Set(['bitcoin-core', 'fulcrum', 'mempool']);
-const ALLOWED_INSTALLS = new Set(['public-pool']);
+// Scripts for update and install endpoints
+const UPDATE_SCRIPTS = {
+  'bitcoin-core': '/opt/nodebox/scripts/update-bitcoin-core.sh',
+  'fulcrum':      '/opt/nodebox/scripts/update-fulcrum.sh',
+  'mempool':      '/opt/nodebox/scripts/update-mempool.sh',
+};
+
+const OPTIONAL_SERVICES = {
+  'public-pool': {
+    installScript: '/opt/nodebox/scripts/install-public-pool.sh',
+    marker:        '/opt/public-pool/backend/dist/main.js',
+    unit:          'public-pool',
+  },
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -62,7 +73,7 @@ function rpcCall(method, params = []) {
   const body = JSON.stringify({ jsonrpc: '1.0', id: method, method, params });
   return new Promise((resolve, reject) => {
     const req = http.request({
-      host: BITCOIN_HOST, port: BITCOIN_PORT, method: 'POST',
+      host: '127.0.0.1', port: BITCOIN_PORT, method: 'POST',
       headers: {
         'Content-Type':   'application/json',
         'Content-Length': Buffer.byteLength(body),
@@ -110,41 +121,6 @@ function fulcrumStatus() {
   });
 }
 
-function diskUsage(mountPath) {
-  return new Promise((resolve) => {
-    execFile('df', ['-B1', mountPath], (err, stdout) => {
-      if (err) return resolve(null);
-      const parts = stdout.trim().split('\n')[1].split(/\s+/);
-      resolve({ total: parseInt(parts[1]), used: parseInt(parts[2]) });
-    });
-  });
-}
-
-async function systemInfo() {
-  const [diskRoot, diskData] = await Promise.all([diskUsage('/'), diskUsage('/data')]);
-
-  let osName = 'Linux';
-  try {
-    const rel = fs.readFileSync('/etc/os-release', 'utf8');
-    osName = rel.match(/PRETTY_NAME="(.+)"/)?.[1] ?? osName;
-  } catch {}
-
-  let cpuTemp = null;
-  try {
-    cpuTemp = Math.round(parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8')) / 1000);
-  } catch {}
-
-  return {
-    os:        osName,
-    uptimeSec: os.uptime(),
-    totalMem:  os.totalmem(),
-    usedMem:   os.totalmem() - os.freemem(),
-    load:      os.loadavg()[0],
-    cpuTemp,
-    disk:      { root: diskRoot, data: diskData },
-  };
-}
-
 // Parse Fulcrum journal to get indexing progress when port is not yet open
 function fulcrumIndexProgress() {
   return new Promise((resolve) => {
@@ -156,12 +132,12 @@ function fulcrumIndexProgress() {
           ...stdout.matchAll(/Processed height: (\d+), ([\d.]+)%, ([\d.]+) blocks\/sec/g),
         ];
         if (!matches.length) return resolve(null);
-        const last      = matches[matches.length - 1];
-        const height    = parseInt(last[1]);
-        const pct       = parseFloat(last[2]);
-        const rate      = parseFloat(last[3]);
-        const total     = Math.round(height / (pct / 100));
-        const etaSec    = rate > 0 ? Math.round((total - height) / rate) : null;
+        const last   = matches[matches.length - 1];
+        const height = parseInt(last[1]);
+        const pct    = parseFloat(last[2]);
+        const rate   = parseFloat(last[3]);
+        const total  = Math.round(height / (pct / 100));
+        const etaSec = rate > 0 ? Math.round((total - height) / rate) : null;
         resolve({ height, pct, etaSec });
       }
     );
@@ -187,6 +163,43 @@ function mempoolStatus() {
     req.on('error',   () => resolve({ ok: false, version: null }));
     req.on('timeout', () => { req.destroy(); resolve({ ok: false, version: null }); });
   });
+}
+
+function diskUsage(mountPath) {
+  return new Promise((resolve) => {
+    execFile('df', ['-B1', mountPath], (err, stdout) => {
+      if (err) return resolve(null);
+      const parts = stdout.trim().split('\n')[1].split(/\s+/);
+      resolve({ total: parseInt(parts[1]), used: parseInt(parts[2]) });
+    });
+  });
+}
+
+async function systemInfo() {
+  const [diskRoot, diskData] = await Promise.all([diskUsage('/'), diskUsage('/data')]);
+
+  let osName = 'Linux';
+  try {
+    const rel = fs.readFileSync('/etc/os-release', 'utf8');
+    osName = rel.match(/PRETTY_NAME="(.+)"/)?.[1] ?? osName;
+  } catch {}
+
+  let cpuTemp = null;
+  try {
+    cpuTemp = Math.round(
+      parseInt(fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8')) / 1000
+    );
+  } catch {}
+
+  return {
+    os:        osName,
+    uptimeSec: os.uptime(),
+    totalMem:  os.totalmem(),
+    usedMem:   os.totalmem() - os.freemem(),
+    load:      os.loadavg()[0],
+    cpuTemp,
+    disk:      { root: diskRoot, data: diskData },
+  };
 }
 
 // GitHub release cache (1 hour TTL)
@@ -215,34 +228,37 @@ function fetchLatestRelease(repo) {
   });
 }
 
-const OPTIONAL_SERVICES = {
-  'public-pool': {
-    installScript: '/opt/nodebox/scripts/install-public-pool.sh',
-    marker:        '/opt/public-pool/backend/dist/main.js',
-    unit:          'public-pool',
-  },
-};
+// Stream a script's stdout/stderr as Server-Sent Events
+function streamScript(script, req, res) {
+  res.setHeader('Content-Type',  'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection',    'keep-alive');
+  res.flushHeaders();
 
-function isInstalled(name) {
-  const svc = OPTIONAL_SERVICES[name];
-  return svc ? fs.existsSync(svc.marker) : false;
-}
+  const send  = (line) => res.write(`data: ${line}\n\n`);
+  const child = execFile('sudo', ['bash', script], { shell: false });
 
-function isRunning(unit) {
-  return new Promise((resolve) => {
-    execFile('systemctl', ['is-active', '--quiet', unit], (err) => resolve(!err));
+  child.stdout.on('data', chunk =>
+    chunk.toString().split('\n').filter(Boolean).forEach(send)
+  );
+  child.stderr.on('data', chunk =>
+    chunk.toString().split('\n').filter(Boolean).forEach(send)
+  );
+  child.on('close', (code) => {
+    send(code === 0 ? '[done]' : `[error] Exit code ${code}`);
+    res.end();
   });
+  req.on('close', () => { if (!child.exitCode) child.kill(); });
 }
 
 // ── Express app ───────────────────────────────────────────────────────────────
 
 const app = express();
-const FRONTEND = path.join(__dirname, '..', 'frontend');
-app.use(express.static(FRONTEND));
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
 // GET /api/status — combined status of all services
 app.get('/api/status', async (req, res) => {
-  const [chainInfo, networkInfo, feeResult, fulcrum, mempool, system] = await Promise.allSettled([
+  const results = await Promise.allSettled([
     rpcCall('getblockchaininfo'),
     rpcCall('getnetworkinfo'),
     rpcCall('estimatesmartfee', [1]),
@@ -250,13 +266,14 @@ app.get('/api/status', async (req, res) => {
     mempoolStatus(),
     systemInfo(),
   ]);
+  const val = (i, fb) => results[i].status === 'fulfilled' ? results[i].value : fb;
 
-  const chain   = chainInfo.status   === 'fulfilled' ? chainInfo.value   : null;
-  const network = networkInfo.status === 'fulfilled' ? networkInfo.value : null;
-  const fee     = feeResult.status   === 'fulfilled' ? feeResult.value   : null;
-  const flc     = fulcrum.status     === 'fulfilled' ? fulcrum.value     : { ok: false };
-  const mpl     = mempool.status     === 'fulfilled' ? mempool.value     : { ok: false, version: null };
-  const sys     = system.status      === 'fulfilled' ? system.value      : null;
+  const chain   = val(0, null);
+  const network = val(1, null);
+  const fee     = val(2, null);
+  const flc     = val(3, { ok: false });
+  const mpl     = val(4, { ok: false, version: null });
+  const sys     = val(5, null);
 
   const fulcrumData = { ok: flc.ok, version: flc.version ?? null };
   if (!flc.ok) {
@@ -272,20 +289,17 @@ app.get('/api/status', async (req, res) => {
   res.json({
     bitcoin: {
       ok:       !!chain,
-      blocks:   chain?.blocks                      ?? null,
-      headers:  chain?.headers                     ?? null,
+      blocks:   chain?.blocks                   ?? null,
+      headers:  chain?.headers                  ?? null,
       synced:   chain?.initialblockdownload === false,
-      progress: chain?.verificationprogress        ?? null,
-      peers:    network?.connections               ?? null,
-      version:  network?.version                   ?? null,
-      feeRate:  fee?.feerate                       ?? null,
+      progress: chain?.verificationprogress     ?? null,
+      peers:    network?.connections            ?? null,
+      version:  network?.version                ?? null,
+      feeRate:  fee?.feerate                    ?? null,
     },
     fulcrum: fulcrumData,
-    mempool: {
-      ok:      mpl.ok,
-      version: mpl.version,
-    },
-    system: sys,
+    mempool: { ok: mpl.ok, version: mpl.version },
+    system:  sys,
   });
 });
 
@@ -324,80 +338,31 @@ app.get('/api/qr', async (req, res) => {
 app.get('/api/services', async (req, res) => {
   const result = {};
   for (const [name, svc] of Object.entries(OPTIONAL_SERVICES)) {
-    const installed = isInstalled(name);
+    const installed = fs.existsSync(svc.marker);
     result[name] = {
       installed,
-      running: installed ? await isRunning(svc.unit) : false,
+      running: installed
+        ? await new Promise((resolve) =>
+            execFile('systemctl', ['is-active', '--quiet', svc.unit], (err) => resolve(!err))
+          )
+        : false,
     };
   }
   res.json(result);
 });
 
-// POST /api/install/:service — run install script via SSE stream
+// POST /api/install/:service — run install script via SSE
 app.post('/api/install/:service', (req, res) => {
-  const { service } = req.params;
-  if (!ALLOWED_INSTALLS.has(service)) {
-    return res.status(400).json({ error: `Unknown service: ${service}` });
-  }
-
-  res.setHeader('Content-Type',  'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection',    'keep-alive');
-  res.flushHeaders();
-
-  const send = (line) => res.write(`data: ${line}\n\n`);
-  const script = OPTIONAL_SERVICES[service].installScript;
-  const child  = execFile('sudo', ['bash', script], { shell: false });
-
-  child.stdout.on('data', chunk =>
-    chunk.toString().split('\n').filter(Boolean).forEach(send)
-  );
-  child.stderr.on('data', chunk =>
-    chunk.toString().split('\n').filter(Boolean).forEach(send)
-  );
-  child.on('close', (code) => {
-    send(code === 0 ? '[done]' : `[error] Exit code ${code}`);
-    res.end();
-  });
-
-  req.on('close', () => { if (!child.exitCode) child.kill(); });
+  const svc = OPTIONAL_SERVICES[req.params.service];
+  if (!svc) return res.status(400).json({ error: 'Unknown service' });
+  streamScript(svc.installScript, req, res);
 });
 
-// POST /api/update/:service — trigger an update script via SSE stream
+// POST /api/update/:service — run update script via SSE
 app.post('/api/update/:service', (req, res) => {
-  const { service } = req.params;
-
-  if (!ALLOWED_SERVICES.has(service)) {
-    return res.status(400).json({ error: `Unknown service: ${service}` });
-  }
-
-  const scriptMap = {
-    'bitcoin-core': '/opt/nodebox/scripts/update-bitcoin-core.sh',
-    'fulcrum':      '/opt/nodebox/scripts/update-fulcrum.sh',
-    'mempool':      '/opt/nodebox/scripts/update-mempool.sh',
-  };
-
-  res.setHeader('Content-Type',  'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection',    'keep-alive');
-  res.flushHeaders();
-
-  const send = (line) => res.write(`data: ${line}\n\n`);
-
-  const child = execFile('sudo', ['bash', scriptMap[service]], { shell: false });
-
-  child.stdout.on('data', chunk =>
-    chunk.toString().split('\n').filter(Boolean).forEach(send)
-  );
-  child.stderr.on('data', chunk =>
-    chunk.toString().split('\n').filter(Boolean).forEach(send)
-  );
-  child.on('close', (code) => {
-    send(code === 0 ? '[done]' : `[error] Exit code ${code}`);
-    res.end();
-  });
-
-  req.on('close', () => { if (!child.exitCode) child.kill(); });
+  const script = UPDATE_SCRIPTS[req.params.service];
+  if (!script) return res.status(400).json({ error: 'Unknown service' });
+  streamScript(script, req, res);
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

@@ -101,39 +101,6 @@
 
   <script src="app.js"></script>
   <script>
-    function fmtDuration(sec) {
-      if (!sec || sec <= 0) return '—';
-      const d = Math.floor(sec / 86400);
-      const h = Math.floor((sec % 86400) / 3600);
-      const m = Math.floor((sec % 3600) / 60);
-      if (d > 0) return `${d}d ${h}h`;
-      if (h > 0) return `${h}h ${m}m`;
-      return `${m}m`;
-    }
-
-    function fmtBytes(b) {
-      if (b >= 1e12) return `${(b / 1e12).toFixed(1)} TB`;
-      if (b >= 1e9)  return `${(b / 1e9).toFixed(1)} GB`;
-      if (b >= 1e6)  return `${(b / 1e6).toFixed(0)} MB`;
-      return `${b} B`;
-    }
-
-    function fmtBtcVersion(v) {
-      if (!v) return '—';
-      const major = Math.floor(v / 10000);
-      const minor = Math.floor((v % 10000) / 100);
-      const patch = v % 100;
-      return patch > 0 ? `v${major}.${minor}.${patch}` : `v${major}.${minor}`;
-    }
-
-    function btcVersionStr(v) {
-      if (!v) return null;
-      const major = Math.floor(v / 10000);
-      const minor = Math.floor((v % 10000) / 100);
-      const patch = v % 100;
-      return patch > 0 ? `${major}.${minor}.${patch}` : `${major}.${minor}`;
-    }
-
     async function refresh() {
       const [s, updates] = await Promise.all([fetchStatus(), fetchUpdates()]);
       if (!s) return;
