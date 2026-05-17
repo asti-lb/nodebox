@@ -74,8 +74,8 @@ EOF
 
 # SQLite data directory, symlinked into the app working directory
 mkdir -p "$DATA_DIR"
-if [ ! -L "$INSTALL_DIR/backend/mainnet-DB" ]; then
-    ln -sf "$DATA_DIR" "$INSTALL_DIR/backend/mainnet-DB"
+if [ ! -L "$INSTALL_DIR/backend/DB" ]; then
+    ln -sf "$DATA_DIR" "$INSTALL_DIR/backend/DB"
 fi
 
 chown -R pool:pool "$INSTALL_DIR/backend"

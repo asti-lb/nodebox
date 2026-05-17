@@ -11,8 +11,7 @@ ExecStart=/usr/bin/node dist/main.js
 Restart=on-failure
 RestartSec=10
 NoNewPrivileges=true
-ProtectSystem=strict
-ReadWritePaths=/data/pool
+ProtectSystem=full
 PrivateTmp=true
 
 [Install]
