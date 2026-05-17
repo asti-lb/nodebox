@@ -63,9 +63,14 @@
       const [status, updates] = await Promise.all([fetchStatus(), fetchUpdates()]);
 
       const installed = {
-        'bitcoin-core': status?.bitcoin?.version
-          ? `v${Math.floor(status.bitcoin.version / 10000)}.${Math.floor((status.bitcoin.version % 10000) / 100)}.${status.bitcoin.version % 100}`
-          : null,
+        'bitcoin-core': (() => {
+          const v = status?.bitcoin?.version;
+          if (!v) return null;
+          const major = Math.floor(v / 10000);
+          const minor = Math.floor((v % 10000) / 100);
+          const patch = v % 100;
+          return patch > 0 ? `v${major}.${minor}.${patch}` : `v${major}.${minor}`;
+        })(),
         'fulcrum': status?.fulcrum?.version ?? null,
         'mempool':  null,
       };

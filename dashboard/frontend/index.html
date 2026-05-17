@@ -92,7 +92,18 @@
 
     function fmtBtcVersion(v) {
       if (!v) return '—';
-      return `v${Math.floor(v / 10000)}.${Math.floor((v % 10000) / 100)}.${v % 100}`;
+      const major = Math.floor(v / 10000);
+      const minor = Math.floor((v % 10000) / 100);
+      const patch = v % 100;
+      return patch > 0 ? `v${major}.${minor}.${patch}` : `v${major}.${minor}`;
+    }
+
+    function btcVersionStr(v) {
+      if (!v) return null;
+      const major = Math.floor(v / 10000);
+      const minor = Math.floor((v % 10000) / 100);
+      const patch = v % 100;
+      return patch > 0 ? `${major}.${minor}.${patch}` : `${major}.${minor}`;
     }
 
     async function refresh() {
@@ -151,7 +162,7 @@
         const btcLatest = updates.bitcoinCore;
         const flcLatest = updates.fulcrum;
         const mplLatest = updates.mempool;
-        const btcInst   = s.bitcoin.version ? `${Math.floor(s.bitcoin.version/10000)}.${Math.floor((s.bitcoin.version%10000)/100)}.${s.bitcoin.version%100}` : null;
+        const btcInst   = btcVersionStr(s.bitcoin.version);
         const hasUpdate = (btcLatest && btcInst && btcLatest !== btcInst)
                        || (flcLatest && s.fulcrum.version && !s.fulcrum.version.includes(flcLatest))
                        || (mplLatest && s.mempool.version && s.mempool.version !== mplLatest);
