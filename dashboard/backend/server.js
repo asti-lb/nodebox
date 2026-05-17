@@ -34,6 +34,7 @@ const DASHBOARD_PORT = cfg.dashboard.port;
 const ONION_ADDRESS  = cfg.dashboard.onionAddress;
 
 const ALLOWED_SERVICES = new Set(['bitcoin-core', 'fulcrum', 'mempool']);
+const ALLOWED_INSTALLS = new Set(['public-pool']);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -179,6 +180,25 @@ function fetchLatestRelease(repo) {
   });
 }
 
+const OPTIONAL_SERVICES = {
+  'public-pool': {
+    installScript: '/opt/nodebox/scripts/install-public-pool.sh',
+    marker:        '/opt/public-pool/backend/dist/main.js',
+    unit:          'public-pool',
+  },
+};
+
+function isInstalled(name) {
+  const svc = OPTIONAL_SERVICES[name];
+  return svc ? fs.existsSync(svc.marker) : false;
+}
+
+function isRunning(unit) {
+  return new Promise((resolve) => {
+    execFile('systemctl', ['is-active', '--quiet', unit], (err) => resolve(!err));
+  });
+}
+
 // ── Express app ───────────────────────────────────────────────────────────────
 
 const app = express();
@@ -260,6 +280,49 @@ app.get('/api/qr', async (req, res) => {
   } catch {
     res.status(500).end();
   }
+});
+
+// GET /api/services — status of optional installable services
+app.get('/api/services', async (req, res) => {
+  const result = {};
+  for (const [name, svc] of Object.entries(OPTIONAL_SERVICES)) {
+    const installed = isInstalled(name);
+    result[name] = {
+      installed,
+      running: installed ? await isRunning(svc.unit) : false,
+    };
+  }
+  res.json(result);
+});
+
+// POST /api/install/:service — run install script via SSE stream
+app.post('/api/install/:service', (req, res) => {
+  const { service } = req.params;
+  if (!ALLOWED_INSTALLS.has(service)) {
+    return res.status(400).json({ error: `Unknown service: ${service}` });
+  }
+
+  res.setHeader('Content-Type',  'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection',    'keep-alive');
+  res.flushHeaders();
+
+  const send = (line) => res.write(`data: ${line}\n\n`);
+  const script = OPTIONAL_SERVICES[service].installScript;
+  const child  = execFile('sudo', ['bash', script], { shell: false });
+
+  child.stdout.on('data', chunk =>
+    chunk.toString().split('\n').filter(Boolean).forEach(send)
+  );
+  child.stderr.on('data', chunk =>
+    chunk.toString().split('\n').filter(Boolean).forEach(send)
+  );
+  child.on('close', (code) => {
+    send(code === 0 ? '[done]' : `[error] Exit code ${code}`);
+    res.end();
+  });
+
+  req.on('close', () => { if (!child.exitCode) child.kill(); });
 });
 
 // POST /api/update/:service — trigger an update script via SSE stream

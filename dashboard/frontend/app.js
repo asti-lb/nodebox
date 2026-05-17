@@ -16,6 +16,13 @@ async function fetchUpdates() {
   } catch { return null; }
 }
 
+async function fetchServices() {
+  try {
+    const res = await fetch('/api/services');
+    return res.ok ? res.json() : null;
+  } catch { return null; }
+}
+
 async function fetchConfig() {
   try {
     const res = await fetch('/api/config');
