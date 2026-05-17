@@ -64,13 +64,36 @@ h1 {
   margin-bottom: 1.5rem;
 }
 
-/* ── Cards ───────────────────────────────────────────────────────────────── */
+/* ── Service sections ────────────────────────────────────────────────────── */
 
-.cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1rem;
+.service { margin-bottom: 2rem; }
+
+.service-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
+
+.service-head h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.service-logo {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+nav a.has-update::after {
+  content: '•';
+  color: var(--accent);
+  margin-left: 0.2rem;
+}
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
 
 .card {
   background: var(--surface);
@@ -105,6 +128,7 @@ h1 {
 
 .badge-ok      { background: #14532d; color: var(--green); }
 .badge-error   { background: #450a0a; color: var(--red); }
+.badge-syncing { background: #3d2a00; color: #f59e0b; }
 .badge-loading { background: var(--border); color: var(--muted); }
 
 .stat {

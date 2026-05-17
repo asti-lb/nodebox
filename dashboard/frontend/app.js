@@ -31,6 +31,11 @@ function setText(id, value) {
 function setbadge(id, ok) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.className = `badge badge-${ok ? 'ok' : 'error'}`;
-  el.textContent = ok ? 'Online' : 'Offline';
+  if (ok === null) {
+    el.className = 'badge badge-syncing';
+    el.textContent = 'Syncing';
+  } else {
+    el.className = `badge badge-${ok ? 'ok' : 'error'}`;
+    el.textContent = ok ? 'Online' : 'Offline';
+  }
 }

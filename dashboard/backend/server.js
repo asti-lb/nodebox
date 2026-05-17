@@ -25,15 +25,14 @@ try {
   process.exit(1);
 }
 
-const BITCOIN_HOST  = '127.0.0.1';
-const BITCOIN_PORT  = cfg.bitcoin.rpcPort;
-const COOKIE_PATH   = cfg.bitcoin.rpcCookiePath;
-const FULCRUM_PORT  = cfg.fulcrum.tcpPort;
-const MEMPOOL_PORT  = cfg.mempool.port;
+const BITCOIN_HOST   = '127.0.0.1';
+const BITCOIN_PORT   = cfg.bitcoin.rpcPort;
+const COOKIE_PATH    = cfg.bitcoin.rpcCookiePath;
+const FULCRUM_PORT   = cfg.fulcrum.tcpPort;
+const MEMPOOL_PORT   = cfg.mempool.port;
 const DASHBOARD_PORT = cfg.dashboard.port;
-const ONION_ADDRESS = cfg.dashboard.onionAddress;
+const ONION_ADDRESS  = cfg.dashboard.onionAddress;
 
-// Services that can be updated via the dashboard
 const ALLOWED_SERVICES = new Set(['bitcoin-core', 'fulcrum', 'mempool']);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -47,7 +46,6 @@ function localIpAddress() {
   return '127.0.0.1';
 }
 
-// Cache the RPC cookie; re-read only when the file changes on disk
 const cookieCache = { value: null, mtime: 0 };
 function readCookie() {
   const stat = fs.statSync(COOKIE_PATH);
@@ -111,6 +109,29 @@ function fulcrumStatus() {
   });
 }
 
+// Parse Fulcrum journal to get indexing progress when port is not yet open
+function fulcrumIndexProgress() {
+  return new Promise((resolve) => {
+    execFile('journalctl', ['-u', 'fulcrum', '-n', '50', '--no-pager', '--output', 'cat'],
+      { timeout: 5000 },
+      (err, stdout) => {
+        if (err || !stdout) return resolve(null);
+        const matches = [
+          ...stdout.matchAll(/Processed height: (\d+), ([\d.]+)%, ([\d.]+) blocks\/sec/g),
+        ];
+        if (!matches.length) return resolve(null);
+        const last      = matches[matches.length - 1];
+        const height    = parseInt(last[1]);
+        const pct       = parseFloat(last[2]);
+        const rate      = parseFloat(last[3]);
+        const total     = Math.round(height / (pct / 100));
+        const etaSec    = rate > 0 ? Math.round((total - height) / rate) : null;
+        resolve({ height, pct, etaSec });
+      }
+    );
+  });
+}
+
 function mempoolStatus() {
   return new Promise((resolve) => {
     const req = http.get(
@@ -120,13 +141,15 @@ function mempoolStatus() {
         let data = '';
         res.on('data', chunk => (data += chunk));
         res.on('end', () => {
-          try { resolve({ ok: res.statusCode === 200, info: JSON.parse(data) }); }
-          catch { resolve({ ok: res.statusCode === 200 }); }
+          try {
+            const info = JSON.parse(data);
+            resolve({ ok: res.statusCode === 200, version: info.version ?? null });
+          } catch { resolve({ ok: res.statusCode === 200, version: null }); }
         });
       }
     );
-    req.on('error',   () => resolve({ ok: false }));
-    req.on('timeout', () => { req.destroy(); resolve({ ok: false }); });
+    req.on('error',   () => resolve({ ok: false, version: null }));
+    req.on('timeout', () => { req.destroy(); resolve({ ok: false, version: null }); });
   });
 }
 
@@ -144,8 +167,7 @@ function fetchLatestRelease(repo) {
         res.on('data', chunk => (data += chunk));
         res.on('end', () => {
           try {
-            const release = JSON.parse(data);
-            const version = release.tag_name?.replace(/^v/, '') ?? null;
+            const version = JSON.parse(data).tag_name?.replace(/^v/, '') ?? null;
             githubCache[repo] = { at: Date.now(), data: version };
             resolve(version);
           } catch { resolve(null); }
@@ -177,24 +199,34 @@ app.get('/api/status', async (req, res) => {
   const network = networkInfo.status === 'fulfilled' ? networkInfo.value : null;
   const fee     = feeResult.status   === 'fulfilled' ? feeResult.value   : null;
   const flc     = fulcrum.status     === 'fulfilled' ? fulcrum.value     : { ok: false };
-  const mpl     = mempool.status     === 'fulfilled' ? mempool.value     : { ok: false };
+  const mpl     = mempool.status     === 'fulfilled' ? mempool.value     : { ok: false, version: null };
+
+  const fulcrumData = { ok: flc.ok, version: flc.version ?? null };
+  if (!flc.ok) {
+    const progress = await fulcrumIndexProgress();
+    if (progress) {
+      fulcrumData.indexing    = true;
+      fulcrumData.indexPct    = progress.pct;
+      fulcrumData.indexHeight = progress.height;
+      fulcrumData.etaSec      = progress.etaSec;
+    }
+  }
 
   res.json({
     bitcoin: {
-      ok:            !!chain,
-      blocks:        chain?.blocks       ?? null,
-      headers:       chain?.headers      ?? null,
-      synced:        chain?.initialblockdownload === false,
-      peers:         network?.connections ?? null,
-      version:       network?.version    ?? null,
-      feeRate:       fee?.feerate        ?? null,
+      ok:       !!chain,
+      blocks:   chain?.blocks                      ?? null,
+      headers:  chain?.headers                     ?? null,
+      synced:   chain?.initialblockdownload === false,
+      progress: chain?.verificationprogress        ?? null,
+      peers:    network?.connections               ?? null,
+      version:  network?.version                   ?? null,
+      feeRate:  fee?.feerate                       ?? null,
     },
-    fulcrum: {
-      ok:      flc.ok,
-      version: flc.version ?? null,
-    },
+    fulcrum: fulcrumData,
     mempool: {
-      ok: mpl.ok,
+      ok:      mpl.ok,
+      version: mpl.version,
     },
   });
 });
@@ -264,7 +296,6 @@ app.post('/api/update/:service', (req, res) => {
     res.end();
   });
 
-  // Clean up if the browser disconnects
   req.on('close', () => { if (!child.exitCode) child.kill(); });
 });
 
