@@ -13,7 +13,7 @@
 - Uses Nostr pubkeys for identity, WireGuard-based data plane (FIPS)
 - No Tailscale account, no third party — decentralized by design
 - See: https://github.com/mmalmi/nostr-vpn
-- **Status:** On roadmap — test in a dedicated branch when ready
+- **Status:** Test in branch `test/nostr-vpn`
 - iOS not yet publicly available; NAT traversal reliability needs real-world testing
 - Revisit for production once iOS is stable and NAT traversal is battle-tested (~2027)
 
