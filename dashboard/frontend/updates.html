@@ -102,7 +102,7 @@
       log.textContent = '';
       log.classList.add('active');
 
-      const res = await fetch(`/api/update/${service}`, { method: 'POST' });
+      const res = await fetch(`/nodebox/update/${service}`, { method: 'POST' });
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buf = '';

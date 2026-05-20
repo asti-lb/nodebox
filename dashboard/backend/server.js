@@ -256,8 +256,8 @@ function streamScript(script, req, res) {
 const app = express();
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
-// GET /api/status — combined status of all services
-app.get('/api/status', async (req, res) => {
+// GET /nodebox/status — combined status of all services
+app.get('/nodebox/status', async (req, res) => {
   const results = await Promise.allSettled([
     rpcCall('getblockchaininfo'),
     rpcCall('getnetworkinfo'),
@@ -303,8 +303,8 @@ app.get('/api/status', async (req, res) => {
   });
 });
 
-// GET /api/updates — latest available versions from GitHub
-app.get('/api/updates', async (req, res) => {
+// GET /nodebox/updates — latest available versions from GitHub
+app.get('/nodebox/updates', async (req, res) => {
   const [btc, flc, mpl] = await Promise.all([
     fetchLatestRelease('bitcoin/bitcoin'),
     fetchLatestRelease('cculianu/Fulcrum'),
@@ -313,8 +313,8 @@ app.get('/api/updates', async (req, res) => {
   res.json({ bitcoinCore: btc, fulcrum: flc, mempool: mpl });
 });
 
-// GET /api/config — non-secret runtime config for the frontend
-app.get('/api/config', (req, res) => {
+// GET /nodebox/config — non-secret runtime config for the frontend
+app.get('/nodebox/config', (req, res) => {
   res.json({
     onionAddress: ONION_ADDRESS,
     localIp:      localIpAddress(),
@@ -322,8 +322,8 @@ app.get('/api/config', (req, res) => {
   });
 });
 
-// GET /api/qr?data=... — QR code as PNG (no CDN dependency)
-app.get('/api/qr', async (req, res) => {
+// GET /nodebox/qr?data=... — QR code as PNG (no CDN dependency)
+app.get('/nodebox/qr', async (req, res) => {
   const data = req.query.data;
   if (!data || data.length > 500) return res.status(400).end();
   try {
@@ -334,8 +334,8 @@ app.get('/api/qr', async (req, res) => {
   }
 });
 
-// GET /api/services — status of optional installable services
-app.get('/api/services', async (req, res) => {
+// GET /nodebox/services — status of optional installable services
+app.get('/nodebox/services', async (req, res) => {
   const result = {};
   for (const [name, svc] of Object.entries(OPTIONAL_SERVICES)) {
     const installed = fs.existsSync(svc.marker);
@@ -351,15 +351,15 @@ app.get('/api/services', async (req, res) => {
   res.json(result);
 });
 
-// POST /api/install/:service — run install script via SSE
-app.post('/api/install/:service', (req, res) => {
+// POST /nodebox/install/:service — run install script via SSE
+app.post('/nodebox/install/:service', (req, res) => {
   const svc = OPTIONAL_SERVICES[req.params.service];
   if (!svc) return res.status(400).json({ error: 'Unknown service' });
   streamScript(svc.installScript, req, res);
 });
 
-// POST /api/update/:service — run update script via SSE
-app.post('/api/update/:service', (req, res) => {
+// POST /nodebox/update/:service — run update script via SSE
+app.post('/nodebox/update/:service', (req, res) => {
   const script = UPDATE_SCRIPTS[req.params.service];
   if (!script) return res.status(400).json({ error: 'Unknown service' });
   streamScript(script, req, res);

@@ -4,28 +4,28 @@
 
 async function fetchStatus() {
   try {
-    const res = await fetch('/api/status');
+    const res = await fetch('/nodebox/status');
     return res.ok ? res.json() : null;
   } catch { return null; }
 }
 
 async function fetchUpdates() {
   try {
-    const res = await fetch('/api/updates');
+    const res = await fetch('/nodebox/updates');
     return res.ok ? res.json() : null;
   } catch { return null; }
 }
 
 async function fetchServices() {
   try {
-    const res = await fetch('/api/services');
+    const res = await fetch('/nodebox/services');
     return res.ok ? res.json() : null;
   } catch { return null; }
 }
 
 async function fetchConfig() {
   try {
-    const res = await fetch('/api/config');
+    const res = await fetch('/nodebox/config');
     return res.ok ? res.json() : null;
   } catch { return null; }
 }

@@ -51,8 +51,8 @@
       setText('tor-addr',   torAddr);
       setText('local-addr', localAddr);
 
-      document.getElementById('tor-qr').src   = `/api/qr?data=${encodeURIComponent(torAddr)}`;
-      document.getElementById('local-qr').src = `/api/qr?data=${encodeURIComponent(localAddr)}`;
+      document.getElementById('tor-qr').src   = `/nodebox/qr?data=${encodeURIComponent(torAddr)}`;
+      document.getElementById('local-qr').src = `/nodebox/qr?data=${encodeURIComponent(localAddr)}`;
     }
 
     load();
