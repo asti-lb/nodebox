@@ -37,6 +37,7 @@ const UPDATE_SCRIPTS = {
   'bitcoin-core': '/opt/nodebox/scripts/update-bitcoin-core.sh',
   'fulcrum':      '/opt/nodebox/scripts/update-fulcrum.sh',
   'mempool':      '/opt/nodebox/scripts/update-mempool.sh',
+  'public-pool':  '/opt/nodebox/scripts/update-public-pool.sh',
 };
 
 const OPTIONAL_SERVICES = {

@@ -55,13 +55,24 @@
         <div class="log-box" id="log-mempool"></div>
       </div>
 
+      <div class="update-item" id="item-public-pool" style="display:none">
+        <div class="update-item-info">
+          <h2>Public Pool</h2>
+          <p id="ver-public-pool">—</p>
+        </div>
+        <button class="btn btn-primary" onclick="startUpdate('public-pool')" disabled id="btn-public-pool">
+          Update
+        </button>
+        <div class="log-box" id="log-public-pool"></div>
+      </div>
+
     </div>
   </main>
 
   <script src="app.js"></script>
   <script>
     async function load() {
-      const [status, updates] = await Promise.all([fetchStatus(), fetchUpdates()]);
+      const [status, updates, services] = await Promise.all([fetchStatus(), fetchUpdates(), fetchServices()]);
 
       const installed = {
         'bitcoin-core': btcVersionStr(status?.bitcoin?.version),
@@ -89,6 +100,16 @@
         } else {
           el.textContent = inst ? `Installed: ${inst}` : 'Version unavailable';
         }
+      }
+
+      // Public Pool — optional, pinned-commit build (no release version).
+      // Row only appears once installed; install is handled on the Dashboard.
+      const pool = services && services['public-pool'];
+      if (pool && pool.installed) {
+        document.getElementById('item-public-pool').style.display = '';
+        document.getElementById('ver-public-pool').textContent =
+          'Installed: pinned build — rebuilds to the latest tested commit';
+        document.getElementById('btn-public-pool').disabled = false;
       }
     }
 
