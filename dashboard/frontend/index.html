@@ -13,9 +13,9 @@
     <a class="nav-brand" href="/">NodeBox</a>
     <a href="/" class="active">Dashboard</a>
     <a href="/connect.html">Connect</a>
-    <a href="/services.html">Services</a>
     <a href="/updates.html" id="nav-updates">Updates</a>
     <a href="/mempool/" target="_blank">mempool</a>
+    <a href="/pool/" target="_blank">pool</a>
   </nav>
 
   <main>
@@ -74,6 +74,30 @@
         <div class="stat">
           <span class="stat-label">Explorer</span>
           <a href="/mempool/" target="_blank" style="color:var(--accent);font-size:0.85rem">Open →</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="service">
+      <div class="service-head">
+        <img src="logos/public-pool.svg" alt="" class="service-logo">
+        <h2>Public Pool</h2>
+        <span class="badge badge-loading" id="pool-badge">…</span>
+      </div>
+      <div class="card">
+        <div id="pool-installed" style="display:none">
+          <div class="stat"><span class="stat-label">Version</span><span class="stat-value" id="pool-version">—</span></div>
+          <div class="stat">
+            <span class="stat-label">Interface</span>
+            <a href="/pool/" target="_blank" style="color:var(--accent);font-size:0.85rem">Open →</a>
+          </div>
+        </div>
+        <div id="pool-uninstalled" style="display:none">
+          <p style="font-size:0.85rem;color:var(--muted);padding:0.25rem 0 0.75rem">
+            Solo mining pool for your home network. Connect your miner to <code>nodebox.local:3333</code>.
+          </p>
+          <button class="btn btn-primary" id="pool-install-btn" onclick="installPool()">Install</button>
+          <div class="log-box" id="pool-log"></div>
         </div>
       </div>
     </section>
@@ -182,8 +206,69 @@
       }
     }
 
+    // Public Pool — optional service, status from /nodebox/services
+    async function loadPool() {
+      const svc   = await fetchServices();
+      const pool  = svc && svc['public-pool'];
+      const badge = document.getElementById('pool-badge');
+      const installed   = document.getElementById('pool-installed');
+      const uninstalled = document.getElementById('pool-uninstalled');
+
+      if (!pool) {
+        badge.className = 'badge badge-error';
+        badge.textContent = 'Offline';
+        installed.style.display = 'none';
+        uninstalled.style.display = '';
+        return;
+      }
+      if (!pool.installed) {
+        badge.className = 'badge badge-loading';
+        badge.textContent = 'Not installed';
+        installed.style.display = 'none';
+        uninstalled.style.display = '';
+        return;
+      }
+      setbadge('pool-badge', pool.running); // Online / Offline
+      installed.style.display = '';
+      uninstalled.style.display = 'none';
+      setText('pool-version', pool.version ? `v${pool.version}` : '—');
+    }
+
+    async function installPool() {
+      if (!confirm('Install Public Pool? This takes about 10 minutes and will briefly restart bitcoind.')) return;
+
+      const btn = document.getElementById('pool-install-btn');
+      const log = document.getElementById('pool-log');
+      btn.disabled = true;
+      log.textContent = '';
+      log.classList.add('active');
+
+      const res = await fetch('/nodebox/install/public-pool', { method: 'POST' });
+      const reader  = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const text = line.slice(6);
+            log.textContent += text + '\n';
+            log.scrollTop = log.scrollHeight;
+            if (text === '[done]') setTimeout(loadPool, 1000);
+          }
+        }
+      }
+    }
+
     refresh();
+    loadPool();
     setInterval(refresh, 30000);
+    setInterval(loadPool, 30000);
   </script>
 </body>
 </html>

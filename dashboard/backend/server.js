@@ -44,6 +44,7 @@ const OPTIONAL_SERVICES = {
     installScript: '/opt/nodebox/scripts/install-public-pool.sh',
     marker:        '/opt/public-pool/backend/dist/main.js',
     unit:          'public-pool',
+    versionFile:   '/opt/public-pool/backend/package.json',
   },
 };
 
@@ -339,8 +340,15 @@ app.get('/nodebox/services', async (req, res) => {
   const result = {};
   for (const [name, svc] of Object.entries(OPTIONAL_SERVICES)) {
     const installed = fs.existsSync(svc.marker);
+    let version = null;
+    if (installed && svc.versionFile) {
+      try {
+        version = JSON.parse(fs.readFileSync(svc.versionFile, 'utf8')).version ?? null;
+      } catch {}
+    }
     result[name] = {
       installed,
+      version,
       running: installed
         ? await new Promise((resolve) =>
             execFile('systemctl', ['is-active', '--quiet', svc.unit], (err) => resolve(!err))
