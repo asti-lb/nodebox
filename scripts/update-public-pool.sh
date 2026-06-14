@@ -13,6 +13,12 @@ INSTALL_DIR="/opt/public-pool"
 WEB_DIR="/var/www/pool"
 INSTALL_SCRIPT="/opt/nodebox/scripts/install-public-pool.sh"
 
+# The backend repo is owned by 'pool'; running git as root would otherwise be
+# refused with "dubious ownership". Whitelist the repo per-call (no global state).
+git_safe() {  # usage: git_safe <repo_dir> <git args...>
+    git -c safe.directory="$1" -C "$1" "${@:2}"
+}
+
 [[ -d "$INSTALL_DIR/backend/.git" ]] || err "Public Pool is not installed."
 
 # Pinned commits live in the install script — single source of truth.
@@ -20,8 +26,8 @@ BACKEND_COMMIT=$(grep -m1 '^BACKEND_COMMIT=' "$INSTALL_SCRIPT" | cut -d'"' -f2)
 UI_COMMIT=$(grep -m1 '^UI_COMMIT=' "$INSTALL_SCRIPT" | cut -d'"' -f2)
 [[ -n "$BACKEND_COMMIT" && -n "$UI_COMMIT" ]] || err "Could not read pinned commits from installer."
 
-CURRENT_BACKEND=$(git -C "$INSTALL_DIR/backend" rev-parse HEAD)
-CURRENT_UI=$(git -C "$INSTALL_DIR/ui" rev-parse HEAD 2>/dev/null || echo "unknown")
+CURRENT_BACKEND=$(git_safe "$INSTALL_DIR/backend" rev-parse HEAD)
+CURRENT_UI=$(git_safe "$INSTALL_DIR/ui" rev-parse HEAD 2>/dev/null || echo "unknown")
 
 log "Backend: ${CURRENT_BACKEND:0:12} -> ${BACKEND_COMMIT:0:12}"
 log "UI:      ${CURRENT_UI:0:12} -> ${UI_COMMIT:0:12}"
@@ -36,15 +42,15 @@ systemctl stop public-pool
 
 # ── Backend ─────────────────────────────────────────────────────────────────────
 log "Updating backend (commit ${BACKEND_COMMIT:0:12}) ..."
-git -C "$INSTALL_DIR/backend" fetch --quiet origin
-git -C "$INSTALL_DIR/backend" checkout --quiet -f "$BACKEND_COMMIT"
+git_safe "$INSTALL_DIR/backend" fetch --quiet origin
+git_safe "$INSTALL_DIR/backend" checkout --quiet -f "$BACKEND_COMMIT"
 (cd "$INSTALL_DIR/backend" && npm ci --quiet && npm run build --quiet)
 chown -R pool:pool "$INSTALL_DIR/backend"
 
 # ── Frontend ────────────────────────────────────────────────────────────────────
 log "Updating frontend (commit ${UI_COMMIT:0:12}) ..."
-git -C "$INSTALL_DIR/ui" fetch --quiet origin
-git -C "$INSTALL_DIR/ui" checkout --quiet -f "$UI_COMMIT"
+git_safe "$INSTALL_DIR/ui" fetch --quiet origin
+git_safe "$INSTALL_DIR/ui" checkout --quiet -f "$UI_COMMIT"
 
 # Re-apply the local environment patch (checkout -f discards it).
 cat > "$INSTALL_DIR/ui/src/environments/environment.prod.ts" << 'EOF'
