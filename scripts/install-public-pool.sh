@@ -17,6 +17,12 @@ ZMQ_PORT=8434
 
 log() { echo "[$(date '+%H:%M:%S')] $*"; }
 
+# On re-runs the backend repo is owned by 'pool'; running git as root would be
+# refused with "dubious ownership". Whitelist the repo per-call (no global state).
+git_safe() {  # usage: git_safe <repo_dir> <git args...>
+    git -c safe.directory="$1" -C "$1" "${@:2}"
+}
+
 if [ "$(id -u)" -ne 0 ]; then
     echo "Run with sudo." >&2
     exit 1
@@ -48,11 +54,11 @@ mkdir -p "$INSTALL_DIR"
 
 if [ -d "$INSTALL_DIR/backend/.git" ]; then
     log "Backend repo exists, updating..."
-    git -C "$INSTALL_DIR/backend" fetch --quiet origin
+    git_safe "$INSTALL_DIR/backend" fetch --quiet origin
 else
     git clone --quiet https://github.com/benjamin-wilson/public-pool "$INSTALL_DIR/backend"
 fi
-git -C "$INSTALL_DIR/backend" checkout --quiet "$BACKEND_COMMIT"
+git_safe "$INSTALL_DIR/backend" checkout --quiet "$BACKEND_COMMIT"
 
 cd "$INSTALL_DIR/backend"
 npm ci --quiet
@@ -86,11 +92,11 @@ log "Installing frontend (commit ${UI_COMMIT:0:12})..."
 
 if [ -d "$INSTALL_DIR/ui/.git" ]; then
     log "UI repo exists, updating..."
-    git -C "$INSTALL_DIR/ui" fetch --quiet origin
+    git_safe "$INSTALL_DIR/ui" fetch --quiet origin
 else
     git clone --quiet https://github.com/benjamin-wilson/public-pool-ui "$INSTALL_DIR/ui"
 fi
-git -C "$INSTALL_DIR/ui" checkout --quiet "$UI_COMMIT"
+git_safe "$INSTALL_DIR/ui" checkout --quiet "$UI_COMMIT"
 
 cd "$INSTALL_DIR/ui"
 npm ci --quiet
