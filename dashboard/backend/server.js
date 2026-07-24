@@ -32,6 +32,11 @@ const MEMPOOL_PORT   = cfg.mempool.port;
 const DASHBOARD_PORT = cfg.dashboard.port;
 const ONION_ADDRESS  = cfg.dashboard.onionAddress;
 
+// mempool is considered "behind" when its indexed tip trails Bitcoin Core's
+// tip by this many blocks. Normal operation stays within one block; a larger
+// gap means the block-indexing loop has stalled (see mempool-watchdog.sh).
+const MEMPOOL_STALL_BLOCKS = 3;
+
 // Scripts for update and install endpoints
 const UPDATE_SCRIPTS = {
   'bitcoin-core': '/opt/nodebox/scripts/update-bitcoin-core.sh',
@@ -167,6 +172,26 @@ function mempoolStatus() {
   });
 }
 
+// Fetch mempool's indexed tip height (plain integer body). null on any error.
+function mempoolTipHeight() {
+  return new Promise((resolve) => {
+    const req = http.get(
+      `http://127.0.0.1:${MEMPOOL_PORT}/api/v1/blocks/tip/height`,
+      { timeout: 5000 },
+      (res) => {
+        let data = '';
+        res.on('data', chunk => (data += chunk));
+        res.on('end', () => {
+          const n = parseInt(data.trim(), 10);
+          resolve(res.statusCode === 200 && Number.isInteger(n) ? n : null);
+        });
+      }
+    );
+    req.on('error',   () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
 function diskUsage(mountPath) {
   return new Promise((resolve) => {
     execFile('df', ['-B1', mountPath], (err, stdout) => {
@@ -267,6 +292,7 @@ app.get('/nodebox/status', async (req, res) => {
     fulcrumStatus(),
     mempoolStatus(),
     systemInfo(),
+    mempoolTipHeight(),
   ]);
   const val = (i, fb) => results[i].status === 'fulfilled' ? results[i].value : fb;
 
@@ -276,6 +302,11 @@ app.get('/nodebox/status', async (req, res) => {
   const flc     = val(3, { ok: false });
   const mpl     = val(4, { ok: false, version: null });
   const sys     = val(5, null);
+  const mplTip  = val(6, null);
+
+  // Compare mempool's indexed tip against Core's tip to detect a stalled indexer.
+  const mplLag     = (chain && mplTip !== null) ? chain.blocks - mplTip : null;
+  const mplStalled = mplLag !== null && mplLag >= MEMPOOL_STALL_BLOCKS;
 
   const fulcrumData = { ok: flc.ok, version: flc.version ?? null };
   if (!flc.ok) {
@@ -300,7 +331,13 @@ app.get('/nodebox/status', async (req, res) => {
       feeRate:  fee?.feerate                    ?? null,
     },
     fulcrum: fulcrumData,
-    mempool: { ok: mpl.ok, version: mpl.version },
+    mempool: {
+      ok:      mpl.ok,
+      version: mpl.version,
+      height:  mplTip,
+      lag:     mplLag,
+      stalled: mplStalled,
+    },
     system:  sys,
   });
 });

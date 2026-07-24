@@ -71,6 +71,10 @@
       </div>
       <div class="card">
         <div class="stat"><span class="stat-label">Version</span><span class="stat-value" id="mpl-version">—</span></div>
+        <div class="stat" id="mpl-lag-row" style="display:none">
+          <span class="stat-label">Sync</span>
+          <span class="stat-value" id="mpl-lag" style="color:#e0a800">—</span>
+        </div>
         <div class="stat">
           <span class="stat-label">Explorer</span>
           <a href="/mempool/" target="_blank" style="color:var(--accent);font-size:0.85rem">Open →</a>
@@ -172,9 +176,23 @@
         flcOffline.style.display  = '';
       }
 
-      // mempool
-      setbadge('mpl-badge', s.mempool.ok);
-      setText('mpl-version', s.mempool.version ? `v${s.mempool.version}` : '—');
+      // mempool — "Behind" (amber) when the block indexer trails Core
+      const mpl = s.mempool;
+      if (mpl.ok && mpl.stalled) {
+        const b = document.getElementById('mpl-badge');
+        b.className = 'badge badge-syncing';
+        b.textContent = 'Behind';
+      } else {
+        setbadge('mpl-badge', mpl.ok);
+      }
+      setText('mpl-version', mpl.version ? `v${mpl.version}` : '—');
+      const mplLagRow = document.getElementById('mpl-lag-row');
+      if (mpl.ok && mpl.lag != null && mpl.lag >= 1) {
+        mplLagRow.style.display = '';
+        setText('mpl-lag', `${mpl.lag.toLocaleString()} block${mpl.lag === 1 ? '' : 's'} behind`);
+      } else {
+        mplLagRow.style.display = 'none';
+      }
 
       // Server
       if (s.system) {

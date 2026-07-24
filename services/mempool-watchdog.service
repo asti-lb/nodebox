@@ -1,0 +1,10 @@
+[Unit]
+Description=NodeBox mempool.space stall watchdog
+After=mempool-backend.service
+Wants=mempool-backend.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/nodebox/scripts/mempool-watchdog.sh
+# Runs as root: needs systemctl restart and Bitcoin Core's cookie.
+User=root
