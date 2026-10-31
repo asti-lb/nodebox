@@ -23,8 +23,15 @@
     <div class="connect-grid">
 
       <div class="connect-card">
-        <h2>Local network</h2>
-        <p>Connect from your home network. Use this address in any Electrum-compatible wallet (Sparrow, Electrum, Blue Wallet, Specter …).</p>
+        <h2>Local network (recommended)</h2>
+        <p>Encrypted connection from your home network, for any Electrum-compatible wallet (Sparrow, Electrum, Blue Wallet, Specter …). Enable SSL in your wallet and accept the certificate on first connect.</p>
+        <div class="addr" id="local-ssl-addr">Loading…</div>
+        <div class="qr"><img id="local-ssl-qr" alt="QR Code"></div>
+      </div>
+
+      <div class="connect-card">
+        <h2>Local network (unencrypted)</h2>
+        <p>Use this only if your wallet cannot reach the address above. Other devices on your network could see which addresses your wallet looks up.</p>
         <div class="addr" id="local-addr">Loading…</div>
         <div class="qr"><img id="local-qr" alt="QR Code"></div>
       </div>
@@ -47,12 +54,16 @@
 
       const torAddr   = `${cfg.onionAddress}:${cfg.fulcrumPort}`;
       const localAddr = `${cfg.localIp}:${cfg.fulcrumPort}`;
+      // By name: the SSL certificate covers the hostname, not the IP address.
+      const localSslAddr = `${cfg.localName}:${cfg.fulcrumSslPort}`;
 
-      setText('tor-addr',   torAddr);
-      setText('local-addr', localAddr);
+      setText('tor-addr',       torAddr);
+      setText('local-addr',     localAddr);
+      setText('local-ssl-addr', localSslAddr);
 
-      document.getElementById('tor-qr').src   = `/nodebox/qr?data=${encodeURIComponent(torAddr)}`;
-      document.getElementById('local-qr').src = `/nodebox/qr?data=${encodeURIComponent(localAddr)}`;
+      document.getElementById('tor-qr').src       = `/nodebox/qr?data=${encodeURIComponent(torAddr)}`;
+      document.getElementById('local-qr').src     = `/nodebox/qr?data=${encodeURIComponent(localAddr)}`;
+      document.getElementById('local-ssl-qr').src = `/nodebox/qr?data=${encodeURIComponent(localSslAddr)}`;
     }
 
     load();

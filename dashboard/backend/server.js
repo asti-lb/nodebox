@@ -28,6 +28,7 @@ try {
 const BITCOIN_PORT   = cfg.bitcoin.rpcPort;
 const COOKIE_PATH    = cfg.bitcoin.rpcCookiePath;
 const FULCRUM_PORT   = cfg.fulcrum.tcpPort;
+const FULCRUM_SSL_PORT = cfg.fulcrum.sslPort ?? 50002;
 const MEMPOOL_PORT   = cfg.mempool.port;
 const DASHBOARD_PORT = cfg.dashboard.port;
 const ONION_ADDRESS  = cfg.dashboard.onionAddress;
@@ -402,7 +403,9 @@ app.get('/nodebox/config', (req, res) => {
   res.json({
     onionAddress: ONION_ADDRESS,
     localIp:      localIpAddress(),
+    localName:    `${os.hostname()}.local`,
     fulcrumPort:  FULCRUM_PORT,
+    fulcrumSslPort: FULCRUM_SSL_PORT,
   });
 });
 

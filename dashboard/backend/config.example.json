@@ -4,7 +4,8 @@
     "rpcPort": 8332
   },
   "fulcrum": {
-    "tcpPort": 50001
+    "tcpPort": 50001,
+    "sslPort": 50002
   },
   "mempool": {
     "port": 8080
