@@ -198,6 +198,28 @@ function mempoolTipHeight() {
   });
 }
 
+// Fee for the next block, based on mempool's view of waiting transactions. null on any error.
+function mempoolNextBlockFee() {
+  return new Promise((resolve) => {
+    const req = http.get(
+      `http://127.0.0.1:${MEMPOOL_PORT}/api/v1/fees/recommended`,
+      { timeout: 5000 },
+      (res) => {
+        let data = '';
+        res.on('data', chunk => (data += chunk));
+        res.on('end', () => {
+          try {
+            const fee = JSON.parse(data).fastestFee;
+            resolve(res.statusCode === 200 && Number.isFinite(fee) ? fee : null);
+          } catch { resolve(null); }
+        });
+      }
+    );
+    req.on('error',   () => resolve(null));
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+  });
+}
+
 function diskUsage(mountPath) {
   return new Promise((resolve) => {
     execFile('df', ['-B1', mountPath], (err, stdout) => {
@@ -327,6 +349,7 @@ app.get('/nodebox/status', async (req, res) => {
     mempoolStatus(),
     systemInfo(),
     mempoolTipHeight(),
+    mempoolNextBlockFee(),
   ]);
   const val = (i, fb) => results[i].status === 'fulfilled' ? results[i].value : fb;
 
@@ -337,10 +360,17 @@ app.get('/nodebox/status', async (req, res) => {
   const mpl     = val(4, { ok: false, version: null });
   const sys     = val(5, null);
   const mplTip  = val(6, null);
+  const mplFee  = val(7, null);
 
   // Compare mempool's indexed tip against Core's tip to detect a stalled indexer.
   const mplLag     = (chain && mplTip !== null) ? chain.blocks - mplTip : null;
   const mplStalled = mplLag !== null && mplLag >= MEMPOOL_STALL_BLOCKS;
+
+  // Prefer mempool's live view. Core's estimate looks back at past blocks and sets its own
+  // target, so report the number of blocks it actually applies to. Core gives BTC/kvB.
+  let feeEstimate = null;
+  if (mplFee !== null && !mplStalled) feeEstimate = { satPerVb: mplFee, blocks: 1 };
+  else if (fee?.feerate) feeEstimate = { satPerVb: fee.feerate * 100000, blocks: fee.blocks };
 
   const fulcrumData = { ok: flc.ok, version: flc.version ?? null };
   if (!flc.ok) {
@@ -362,7 +392,7 @@ app.get('/nodebox/status', async (req, res) => {
       progress: chain?.verificationprogress     ?? null,
       peers:    network?.connections            ?? null,
       version:  network?.version                ?? null,
-      feeRate:  fee?.feerate                    ?? null,
+      fee:      feeEstimate,
     },
     fulcrum: fulcrumData,
     mempool: {

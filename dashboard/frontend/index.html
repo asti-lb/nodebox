@@ -30,7 +30,7 @@
       <div class="card">
         <div class="stat"><span class="stat-label">Blocks</span><span class="stat-value" id="btc-blocks">—</span></div>
         <div class="stat"><span class="stat-label">Peers</span><span class="stat-value" id="btc-peers">—</span></div>
-        <div class="stat"><span class="stat-label">Fee (next block)</span><span class="stat-value" id="btc-fee">—</span></div>
+        <div class="stat"><span class="stat-label" id="btc-fee-label">Fee</span><span class="stat-value" id="btc-fee">—</span></div>
         <div class="stat"><span class="stat-label">Version</span><span class="stat-value" id="btc-version">—</span></div>
         <div id="btc-sync-wrap" style="display:none">
           <div class="progress-wrap"><div class="progress-bar" id="btc-sync-bar"></div></div>
@@ -137,8 +137,9 @@
       setbadge('btc-badge', s.bitcoin.ok);
       setText('btc-blocks',  s.bitcoin.blocks?.toLocaleString() ?? '—');
       setText('btc-peers',   s.bitcoin.peers  ?? '—');
-      const fee = s.bitcoin.feeRate;
-      setText('btc-fee',     fee ? `${(fee * 100000).toFixed(1)} sat/vB` : '—');
+      const fee = s.bitcoin.fee;
+      setText('btc-fee-label', !fee ? 'Fee' : fee.blocks === 1 ? 'Fee (next block)' : `Fee (~${fee.blocks} blocks)`);
+      setText('btc-fee',     fee ? `${Number(fee.satPerVb.toFixed(2))} sat/vB` : '—');
       setText('btc-version', fmtBtcVersion(s.bitcoin.version));
 
       const syncing = s.bitcoin.ok && s.bitcoin.synced === false;
