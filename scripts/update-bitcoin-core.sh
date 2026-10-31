@@ -60,8 +60,8 @@ log "Verifying SHA256 checksum ..."
 
 log "Extracting and installing binaries ..."
 tar -xzf "$TMP/${BASE}.tar.gz" -C "$TMP"
-install -m 0755 "$TMP/${BASE}/bin/bitcoind"   "$INSTALL_DIR/bitcoind"
-install -m 0755 "$TMP/${BASE}/bin/bitcoin-cli" "$INSTALL_DIR/bitcoin-cli"
+install -m 0755 "$TMP/bitcoin-${VERSION}/bin/bitcoind"    "$INSTALL_DIR/bitcoind"
+install -m 0755 "$TMP/bitcoin-${VERSION}/bin/bitcoin-cli" "$INSTALL_DIR/bitcoin-cli"
 
 log "Restarting bitcoind ..."
 systemctl restart bitcoind
