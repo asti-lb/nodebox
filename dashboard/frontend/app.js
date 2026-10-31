@@ -30,6 +30,13 @@ async function fetchConfig() {
   } catch { return null; }
 }
 
+async function fetchOs() {
+  try {
+    const res = await fetch('/nodebox/os');
+    return res.ok ? res.json() : null;
+  } catch { return null; }
+}
+
 async function fetchTask() {
   try {
     const res = await fetch('/nodebox/task');

@@ -22,6 +22,20 @@
     <h1>Updates</h1>
     <div class="update-list" id="update-list">
 
+      <div class="update-item" id="item-os">
+        <div class="update-item-info">
+          <h2>Debian</h2>
+          <p id="ver-os">Checking for updates…</p>
+        </div>
+        <button class="btn btn-primary" onclick="restart()" id="btn-reboot" style="display:none">
+          Restart
+        </button>
+        <button class="btn btn-primary" onclick="startUpdate('os')" disabled id="btn-os">
+          Update
+        </button>
+        <div class="log-box" id="log-os"></div>
+      </div>
+
       <div class="update-item" id="item-bitcoin-core">
         <div class="update-item-info">
           <h2>Bitcoin Core</h2>
@@ -72,12 +86,16 @@
   <script src="app.js"></script>
   <script>
     async function load() {
-      const [status, updates, services] = await Promise.all([fetchStatus(), fetchUpdates(), fetchServices()]);
+      const [status, updates, services, osInfo] = await Promise.all([
+        fetchStatus(), fetchUpdates(), fetchServices(), fetchOs(),
+      ]);
+
+      showOs(osInfo);
 
       const installed = {
         'bitcoin-core': btcVersionStr(status?.bitcoin?.version),
-        'fulcrum':      status?.fulcrum?.version ?? null,
-        'mempool':      null,
+        'fulcrum':      status?.fulcrum?.version?.replace(/^Fulcrum /, '') ?? null,
+        'mempool':      status?.mempool?.version ?? null,
       };
 
       const latest = {
@@ -96,9 +114,10 @@
           el.textContent = inst
             ? `Installed: v${inst}  ·  Latest: v${lat}`
             : `Latest: v${lat}`;
-          btn.disabled = false;
+          btn.disabled = inst === lat;
         } else {
-          el.textContent = inst ? `Installed: ${inst}` : 'Version unavailable';
+          el.textContent = inst ? `Installed: v${inst}` : 'Version unavailable';
+          btn.disabled = true;
         }
       }
 
@@ -119,19 +138,49 @@
         const btn = document.getElementById(`btn-${service}`);
         btn.disabled = true;
         await followTask(task.name, document.getElementById(`log-${service}`));
-        btn.disabled = false;
+        await load();
       }
+    }
+
+    function showOs(info) {
+      const btn = document.getElementById('btn-os');
+      const pending = info?.pending;
+      btn.disabled = !pending?.count;
+      document.getElementById('btn-reboot').style.display = info?.rebootRequired ? '' : 'none';
+
+      if (!pending) {
+        setText('ver-os', 'Update status unavailable');
+        return;
+      }
+      const parts = [pending.count
+        ? `${pending.count} updates (${pending.security} security${pending.kernel ? ', new kernel' : ''})`
+        : 'Up to date'];
+      if (info.listsUpdatedAt) {
+        parts.push(`Checked: ${new Date(info.listsUpdatedAt).toLocaleDateString()}`);
+      }
+      if (info.rebootRequired) parts.push('Restart required');
+      setText('ver-os', parts.join('  ·  '));
     }
 
     async function startUpdate(service) {
       const btn = document.getElementById(`btn-${service}`);
       const log = document.getElementById(`log-${service}`);
 
-      if (!confirm(`Update ${service}? The service will restart briefly.`)) return;
+      const warning = service === 'os'
+        ? 'Install all Debian updates? Services may restart while this runs.'
+        : `Update ${service}? The service will restart briefly.`;
+      if (!confirm(warning)) return;
 
       btn.disabled = true;
       await startTask(`update-${service}`, log);
-      btn.disabled = false;
+      await load();
+    }
+
+    async function restart() {
+      if (!confirm('Restart NodeBox now? Everything is offline until it is back, usually for several minutes up to about 15.')) return;
+
+      document.getElementById('btn-reboot').disabled = true;
+      await startTask('reboot', document.getElementById('log-os'));
     }
 
     load();

@@ -20,7 +20,7 @@ task=$(basename "${pending[0]}")
 rm -rf -- "${pending[@]}"
 
 case "$task" in
-  install-public-pool|update-bitcoin-core|update-fulcrum|update-mempool|update-public-pool) ;;
+  install-public-pool|reboot|update-bitcoin-core|update-fulcrum|update-mempool|update-os|update-public-pool) ;;
   *) echo "Unknown task: $task" >&2; exit 1 ;;
 esac
 

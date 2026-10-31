@@ -40,9 +40,11 @@ const MEMPOOL_STALL_BLOCKS = 3;
 // Privileged tasks run by nodebox-runner (see scripts/nodebox-runner.sh)
 const TASKS = new Set([
   'install-public-pool',
+  'reboot',
   'update-bitcoin-core',
   'update-fulcrum',
   'update-mempool',
+  'update-os',
   'update-public-pool',
 ]);
 const TASK_REQUESTS = '/var/lib/nodebox/requests';
@@ -257,6 +259,37 @@ function fetchLatestRelease(repo) {
   });
 }
 
+// Pending Debian updates, from a dry run of what update-os.sh installs.
+function pendingOsUpdates() {
+  return new Promise((resolve) => {
+    execFile('apt-get', ['-s', 'full-upgrade'],
+      { timeout: 30000, maxBuffer: 10 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err) return resolve(null);
+        const pending = stdout.split('\n').filter(line => line.startsWith('Inst '));
+        resolve({
+          count:    pending.length,
+          security: pending.filter(line => /\(.*-security/i.test(line)).length,
+          kernel:   pending.some(line => line.startsWith('Inst linux-image-')),
+        });
+      }
+    );
+  });
+}
+
+// True when a newer kernel is installed than the one running.
+function kernelRebootRequired() {
+  const { compare } = new Intl.Collator('en', { numeric: true });
+  try {
+    const newest = fs.readdirSync('/boot')
+      .filter(file => file.startsWith('vmlinuz-'))
+      .map(file => file.slice('vmlinuz-'.length))
+      .sort(compare)
+      .pop();
+    return newest !== undefined && newest !== os.release();
+  } catch { return false; }
+}
+
 function unitActive(unit) {
   return new Promise((resolve) =>
     execFile('systemctl', ['is-active', '--quiet', unit], (err) => resolve(!err))
@@ -349,6 +382,17 @@ app.get('/nodebox/updates', async (req, res) => {
     fetchLatestRelease('mempool/mempool'),
   ]);
   res.json({ bitcoinCore: btc, fulcrum: flc, mempool: mpl });
+});
+
+// GET /nodebox/os — pending Debian updates and whether a restart is needed
+app.get('/nodebox/os', async (req, res) => {
+  let listsUpdatedAt = null;
+  try { listsUpdatedAt = fs.statSync('/var/lib/apt/lists').mtime; } catch {}
+  res.json({
+    pending:        await pendingOsUpdates(),
+    listsUpdatedAt,
+    rebootRequired: kernelRebootRequired(),
+  });
 });
 
 // GET /nodebox/config — non-secret runtime config for the frontend
