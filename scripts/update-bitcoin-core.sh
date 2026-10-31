@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Update Bitcoin Core to the latest release.
-# Downloads the binary, verifies GPG signature and SHA256 checksum,
+# Update Bitcoin Core to the version NodeBox has tested (configs/bitcoin-core-version).
+# Downloads the binary, verifies GPG signatures and SHA256 checksum,
 # then replaces the running binary with zero manual steps.
 set -euo pipefail
 
@@ -13,25 +13,21 @@ INSTALL_DIR="/usr/local/bin"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-# ── Fetch latest release ──────────────────────────────────────────────────────
+# ── Check version ─────────────────────────────────────────────────────────────
 
-log "Fetching latest Bitcoin Core release from GitHub ..."
-LATEST=$(curl -fsSL \
-  -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/bitcoin/bitcoin/releases/latest" \
-  | grep '"tag_name"' | head -1 | sed 's/.*"v\([^"]*\)".*/\1/')
-
-[[ -n "$LATEST" ]] || err "Could not determine latest version."
+VERSION=$(cat /opt/nodebox/configs/bitcoin-core-version)
+[[ -n "$VERSION" ]] || err "Could not determine target version."
 
 CURRENT=$(bitcoind --version 2>/dev/null | grep -oP '\d+\.\d+(\.\d+)?' | head -1 || true)
-log "Installed: ${CURRENT:-unknown}  →  Latest: ${LATEST}"
-[[ "$CURRENT" == "$LATEST" ]] && { log "Already up to date."; exit 0; }
+CURRENT=${CURRENT%.0}   # bitcoind reports 31.2.0 for release 31.2
+log "Installed: ${CURRENT:-unknown}  →  Target: ${VERSION}"
+[[ "$CURRENT" == "$VERSION" ]] && { log "Already up to date."; exit 0; }
 
 # ── Download ──────────────────────────────────────────────────────────────────
 
 ARCH="x86_64-linux-gnu"
-BASE="bitcoin-${LATEST}-${ARCH}"
-URL="https://bitcoincore.org/bin/bitcoin-core-${LATEST}"
+BASE="bitcoin-${VERSION}-${ARCH}"
+URL="https://bitcoincore.org/bin/bitcoin-core-${VERSION}"
 
 log "Downloading ${BASE}.tar.gz ..."
 curl -fsSL --progress-bar -o "$TMP/${BASE}.tar.gz"     "${URL}/${BASE}.tar.gz"
@@ -40,17 +36,19 @@ curl -fsSL -o "$TMP/SHA256SUMS.asc"                    "${URL}/SHA256SUMS.asc"
 
 # ── GPG verification ──────────────────────────────────────────────────────────
 
-log "Importing Bitcoin Core release signing keys ..."
-gpg --keyserver hkps://keys.openpgp.org --recv-keys \
-  E777299FC265DD04793070EB944D35F9AC3DB76A \
-  152812300785C96444D3334D17565732E08E5E41 \
-  0AD83877C1F0CD1EE9BD660AD7CC770B81FD22A8 \
-  590B7292695AFFA5B672CBB2E13FC145CD3F4304 \
-  2>/dev/null || true
+# A keyring of its own, so only the release signers in the repo count as valid.
+export GNUPGHOME="$TMP/gnupg"
+install -d -m 0700 "$GNUPGHOME"
 
-log "Verifying GPG signature ..."
-gpg --verify "$TMP/SHA256SUMS.asc" "$TMP/SHA256SUMS" \
-  || err "GPG signature verification failed."
+log "Importing Bitcoin Core release signing keys ..."
+gpg --import /opt/nodebox/configs/bitcoin-core-keys.asc 2>/dev/null
+
+# gpg exits non-zero when any signer's key is missing, so count good signatures instead.
+log "Verifying GPG signatures ..."
+GOOD=$(gpg --status-fd 1 --verify "$TMP/SHA256SUMS.asc" "$TMP/SHA256SUMS" 2>/dev/null \
+  | grep -c '^\[GNUPG:\] GOODSIG' || true)
+log "Good signatures from known keys: ${GOOD}"
+[[ "$GOOD" -ge 3 ]] || err "GPG verification failed: need at least 3 good signatures."
 
 # ── SHA256 verification ───────────────────────────────────────────────────────
 
@@ -68,4 +66,4 @@ install -m 0755 "$TMP/${BASE}/bin/bitcoin-cli" "$INSTALL_DIR/bitcoin-cli"
 log "Restarting bitcoind ..."
 systemctl restart bitcoind
 
-log "Bitcoin Core ${LATEST} installed successfully."
+log "Bitcoin Core ${VERSION} installed successfully."

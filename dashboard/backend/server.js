@@ -47,6 +47,7 @@ const TASKS = new Set([
   'update-os',
   'update-public-pool',
 ]);
+const BITCOIN_CORE_VERSION_FILE = path.join(__dirname, '..', '..', 'configs', 'bitcoin-core-version');
 const TASK_REQUESTS = '/var/lib/nodebox/requests';
 const TASK_LOG      = '/var/lib/nodebox/task.log';
 
@@ -374,10 +375,11 @@ app.get('/nodebox/status', async (req, res) => {
   });
 });
 
-// GET /nodebox/updates — latest available versions from GitHub
+// GET /nodebox/updates — available versions: Bitcoin Core as tested by NodeBox, the rest from GitHub
 app.get('/nodebox/updates', async (req, res) => {
-  const [btc, flc, mpl] = await Promise.all([
-    fetchLatestRelease('bitcoin/bitcoin'),
+  let btc = null;
+  try { btc = fs.readFileSync(BITCOIN_CORE_VERSION_FILE, 'utf8').trim(); } catch {}
+  const [flc, mpl] = await Promise.all([
     fetchLatestRelease('cculianu/Fulcrum'),
     fetchLatestRelease('mempool/mempool'),
   ]);
