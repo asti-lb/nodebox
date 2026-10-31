@@ -37,17 +37,19 @@ const ONION_ADDRESS  = cfg.dashboard.onionAddress;
 // gap means the block-indexing loop has stalled (see mempool-watchdog.sh).
 const MEMPOOL_STALL_BLOCKS = 3;
 
-// Scripts for update and install endpoints
-const UPDATE_SCRIPTS = {
-  'bitcoin-core': '/opt/nodebox/scripts/update-bitcoin-core.sh',
-  'fulcrum':      '/opt/nodebox/scripts/update-fulcrum.sh',
-  'mempool':      '/opt/nodebox/scripts/update-mempool.sh',
-  'public-pool':  '/opt/nodebox/scripts/update-public-pool.sh',
-};
+// Privileged tasks run by nodebox-runner (see scripts/nodebox-runner.sh)
+const TASKS = new Set([
+  'install-public-pool',
+  'update-bitcoin-core',
+  'update-fulcrum',
+  'update-mempool',
+  'update-public-pool',
+]);
+const TASK_REQUESTS = '/var/lib/nodebox/requests';
+const TASK_LOG      = '/var/lib/nodebox/task.log';
 
 const OPTIONAL_SERVICES = {
   'public-pool': {
-    installScript: '/opt/nodebox/scripts/install-public-pool.sh',
     marker:        '/opt/public-pool/backend/dist/main.js',
     unit:          'public-pool',
     versionFile:   '/opt/public-pool/backend/package.json',
@@ -255,27 +257,24 @@ function fetchLatestRelease(repo) {
   });
 }
 
-// Stream a script's stdout/stderr as Server-Sent Events
-function streamScript(script, req, res) {
-  res.setHeader('Content-Type',  'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection',    'keep-alive');
-  res.flushHeaders();
-
-  const send  = (line) => res.write(`data: ${line}\n\n`);
-  const child = execFile('sudo', ['bash', script], { shell: false });
-
-  child.stdout.on('data', chunk =>
-    chunk.toString().split('\n').filter(Boolean).forEach(send)
+function unitActive(unit) {
+  return new Promise((resolve) =>
+    execFile('systemctl', ['is-active', '--quiet', unit], (err) => resolve(!err))
   );
-  child.stderr.on('data', chunk =>
-    chunk.toString().split('\n').filter(Boolean).forEach(send)
-  );
-  child.on('close', (code) => {
-    send(code === 0 ? '[done]' : `[error] Exit code ${code}`);
-    res.end();
-  });
-  req.on('close', () => { if (!child.exitCode) child.kill(); });
+}
+
+// A task counts as running from the moment it is requested until the runner exits.
+async function taskRunning() {
+  const pending = await fs.promises.readdir(TASK_REQUESTS).catch(() => []);
+  return pending.length > 0 || unitActive('nodebox-runner');
+}
+
+// Reject state-changing requests sent by other websites from the user's browser.
+function sameOrigin(req, res, next) {
+  try {
+    if (new URL(req.headers.origin).host === req.headers.host) return next();
+  } catch {}
+  res.status(403).json({ error: 'Cross-origin request refused' });
 }
 
 // ── Express app ───────────────────────────────────────────────────────────────
@@ -387,28 +386,30 @@ app.get('/nodebox/services', async (req, res) => {
     result[name] = {
       installed,
       version,
-      running: installed
-        ? await new Promise((resolve) =>
-            execFile('systemctl', ['is-active', '--quiet', svc.unit], (err) => resolve(!err))
-          )
-        : false,
+      running: installed ? await unitActive(svc.unit) : false,
     };
   }
   res.json(result);
 });
 
-// POST /nodebox/install/:service — run install script via SSE
-app.post('/nodebox/install/:service', (req, res) => {
-  const svc = OPTIONAL_SERVICES[req.params.service];
-  if (!svc) return res.status(400).json({ error: 'Unknown service' });
-  streamScript(svc.installScript, req, res);
+// GET /nodebox/task — the current or most recent task and its log
+app.get('/nodebox/task', async (req, res) => {
+  let text = '';
+  try { text = fs.readFileSync(TASK_LOG, 'utf8'); } catch {}
+  const name = text.match(/^\[task\] (.+)\n/)?.[1] ?? null;
+  res.json({ name, running: await taskRunning(), log: text.slice(text.indexOf('\n') + 1) });
 });
 
-// POST /nodebox/update/:service — run update script via SSE
-app.post('/nodebox/update/:service', (req, res) => {
-  const script = UPDATE_SCRIPTS[req.params.service];
-  if (!script) return res.status(400).json({ error: 'Unknown service' });
-  streamScript(script, req, res);
+// POST /nodebox/task/:name — ask the runner to start a task
+app.post('/nodebox/task/:name', sameOrigin, async (req, res) => {
+  if (!TASKS.has(req.params.name)) return res.status(400).json({ error: 'Unknown task' });
+  if (await taskRunning()) return res.status(409).json({ error: 'Another task is running' });
+  try {
+    fs.closeSync(fs.openSync(path.join(TASK_REQUESTS, req.params.name), 'w'));
+    res.status(202).end();
+  } catch (err) {
+    res.status(500).json({ error: `Cannot request task: ${err.message}` });
+  }
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

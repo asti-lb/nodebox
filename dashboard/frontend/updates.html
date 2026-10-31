@@ -111,6 +111,16 @@
           'Installed: pinned build — rebuilds to the latest tested commit';
         document.getElementById('btn-public-pool').disabled = false;
       }
+
+      // Pick up an update that is still running, e.g. after a page reload.
+      const task = await fetchTask();
+      const service = task?.running && task.name?.replace(/^update-/, '');
+      if (service && document.getElementById(`log-${service}`)) {
+        const btn = document.getElementById(`btn-${service}`);
+        btn.disabled = true;
+        await followTask(task.name, document.getElementById(`log-${service}`));
+        btn.disabled = false;
+      }
     }
 
     async function startUpdate(service) {
@@ -120,28 +130,7 @@
       if (!confirm(`Update ${service}? The service will restart briefly.`)) return;
 
       btn.disabled = true;
-      log.textContent = '';
-      log.classList.add('active');
-
-      const res = await fetch(`/nodebox/update/${service}`, { method: 'POST' });
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop();
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            log.textContent += line.slice(6) + '\n';
-            log.scrollTop = log.scrollHeight;
-          }
-        }
-      }
-
+      await startTask(`update-${service}`, log);
       btn.disabled = false;
     }
 

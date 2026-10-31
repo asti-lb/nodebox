@@ -1,0 +1,8 @@
+[Unit]
+Description=Watch for NodeBox dashboard task requests
+
+[Path]
+DirectoryNotEmpty=/var/lib/nodebox/requests
+
+[Install]
+WantedBy=multi-user.target

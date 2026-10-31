@@ -258,29 +258,9 @@
       const btn = document.getElementById('pool-install-btn');
       const log = document.getElementById('pool-log');
       btn.disabled = true;
-      log.textContent = '';
-      log.classList.add('active');
-
-      const res = await fetch('/nodebox/install/public-pool', { method: 'POST' });
-      const reader  = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop();
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const text = line.slice(6);
-            log.textContent += text + '\n';
-            log.scrollTop = log.scrollHeight;
-            if (text === '[done]') setTimeout(loadPool, 1000);
-          }
-        }
-      }
+      await startTask('install-public-pool', log);
+      btn.disabled = false;
+      loadPool();
     }
 
     refresh();

@@ -30,6 +30,46 @@ async function fetchConfig() {
   } catch { return null; }
 }
 
+async function fetchTask() {
+  try {
+    const res = await fetch('/nodebox/task');
+    return res.ok ? res.json() : null;
+  } catch { return null; }
+}
+
+// Show a task's log until it ends. Failed polls are retried: the task may restart
+// the dashboard or nginx while it runs.
+async function followTask(name, log) {
+  log.classList.add('active');
+  while (true) {
+    const task = await fetchTask();
+    if (task) {
+      if (task.name === name) {
+        log.textContent = task.log;
+        log.scrollTop = log.scrollHeight;
+      }
+      if (!task.running) return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+}
+
+async function startTask(name, log) {
+  log.textContent = '';
+  log.classList.add('active');
+  try {
+    const res = await fetch(`/nodebox/task/${name}`, { method: 'POST' });
+    if (!res.ok) {
+      log.textContent = `[error] ${(await res.json()).error}\n`;
+      return;
+    }
+  } catch {
+    log.textContent = '[error] Dashboard not reachable\n';
+    return;
+  }
+  await followTask(name, log);
+}
+
 function setText(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value;

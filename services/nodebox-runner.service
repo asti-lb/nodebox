@@ -1,0 +1,7 @@
+[Unit]
+Description=NodeBox task runner
+
+[Service]
+ExecStart=/usr/bin/bash /opt/nodebox/scripts/nodebox-runner.sh
+# Runs as root: tasks install binaries and restart services.
+User=root
